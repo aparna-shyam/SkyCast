@@ -1,9 +1,12 @@
+// lib/main.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:skycast/config.dart'; // Import the secure key
 
-const String apiKey = 'YOUR_API_KEY';
+// The hardcoded apiKey variable has been removed from this version.
 
 class Weather {
   final String cityName;
@@ -77,7 +80,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
     try {
       Position position = await _determinePosition();
       final response = await http.get(Uri.parse(
-          'https://api.openweathermap.org/data/2.5/weather?lat=${position.latitude}&lon=${position.longitude}&appid=$apiKey&units=metric'));
+          'https://api.openweathermap.org/data/2.5/weather?lat=${position.latitude}&lon=${position.longitude}&appid=$openWeatherAPIKey&units=metric'));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -159,7 +162,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          // Display weather icon. OpenWeatherMap icon URLs are reliable.
+                          // Display weather icon.
                           Image.network(
                             'https://openweathermap.org/img/wn/${_weather!.iconCode}@4x.png',
                             scale: 0.5,
