@@ -1,4 +1,5 @@
 // lib/weather_model.dart
+
 import 'package:flutter/material.dart';
 
 class Weather {
@@ -10,6 +11,11 @@ class Weather {
   final int timezoneOffset;
   final int sunrise;
   final int sunset;
+  final double feelsLike;
+  final int humidity;
+  final double windSpeed;
+  final int pressure;
+  final int visibility;
 
   Weather({
     required this.cityName,
@@ -20,6 +26,11 @@ class Weather {
     required this.timezoneOffset,
     required this.sunrise,
     required this.sunset,
+    required this.feelsLike,
+    required this.humidity,
+    required this.windSpeed,
+    required this.pressure,
+    required this.visibility,
   });
 
   factory Weather.fromJson(Map<String, dynamic> json) {
@@ -32,6 +43,11 @@ class Weather {
       timezoneOffset: json['timezone'],
       sunrise: json['sys']['sunrise'],
       sunset: json['sys']['sunset'],
+      feelsLike: json['main']['feels_like'].toDouble(),
+      humidity: json['main']['humidity'],
+      windSpeed: json['wind']['speed'].toDouble(),
+      pressure: json['main']['pressure'],
+      visibility: json['visibility'],
     );
   }
 }

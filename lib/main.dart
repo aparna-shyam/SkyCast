@@ -1,12 +1,13 @@
-// lib/main.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
+import 'package:skycast/config.dart';
 import 'package:skycast/splash_screen.dart';
 import 'package:skycast/weather_service.dart';
 import 'package:skycast/weather_model.dart';
-import 'package:skycast/config.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
+import 'package:skycast/settings_page.dart';
+import 'dart:async';
 
 void main() {
   runApp(const MyApp());
@@ -30,19 +31,19 @@ class MyApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const WeatherAppLoader(),
+      home: const MainNavigation(),
     );
   }
 }
 
-class WeatherAppLoader extends StatefulWidget {
-  const WeatherAppLoader({super.key});
+class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key});
 
   @override
-  State<WeatherAppLoader> createState() => _WeatherAppLoaderState();
+  State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _WeatherAppLoaderState extends State<WeatherAppLoader> {
+class _MainNavigationState extends State<MainNavigation> {
   final WeatherService _weatherService = WeatherService();
   Weather? _weather;
   List<Forecast>? _hourlyForecast;
@@ -51,7 +52,8 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
   String _error = '';
   String _currentCity = '';
   bool _isCelsius = true;
-  final TextEditingController _cityController = TextEditingController();
+
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -66,6 +68,7 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
     });
     try {
       final weatherData = await _weatherService.fetchWeatherByLocation();
+      await Future.delayed(const Duration(seconds: 2));
       setState(() {
         _weather = weatherData.weather;
         _hourlyForecast = [];
@@ -74,6 +77,7 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
         _isLoading = false;
       });
     } catch (e) {
+      await Future.delayed(const Duration(seconds: 2));
       setState(() {
         _error = 'Failed to fetch weather data. ($e)';
         _isLoading = false;
@@ -138,7 +142,6 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
     return 'assets/backgrounds/default.jpg';
   }
 
-  // A helper function to format a Unix timestamp to a readable time.
   String _formatTime(int unixTimestamp, int timezoneOffset) {
     final dateTimeUtc =
         DateTime.fromMillisecondsSinceEpoch(unixTimestamp * 1000, isUtc: true);
@@ -167,10 +170,46 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
       );
     }
 
+    // List of widgets to display in the bottom navigation
+    final List<Widget> pages = [
+      _buildHomePage(),
+      SettingsPage(
+        isCelsius: _isCelsius,
+        onToggleUnit: _toggleUnit,
+      ),
+    ];
+
+    return Scaffold(
+      body: pages[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
+        currentIndex: _selectedIndex,
+        selectedItemColor: Colors.amber[800],
+        unselectedItemColor: Colors.white70,
+        backgroundColor: const Color(0xFF2C3240),
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildHomePage() {
     return WeatherHomePage(
       weather: _weather!,
-      hourlyForecast: _hourlyForecast!,
-      dailyForecast: _dailyForecast!,
+      hourlyForecast: _hourlyForecast ?? [],
+      dailyForecast: _dailyForecast ?? [],
       currentCity: _currentCity,
       isCelsius: _isCelsius,
       onToggleUnit: _toggleUnit,
@@ -178,7 +217,7 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
       onFetchByCity: _fetchWeatherByCity,
       convertTemperature: _convertTemperature,
       getBackgroundAsset: _getBackgroundAsset,
-      formatTime: _formatTime, // Pass the new helper function
+      formatTime: _formatTime,
     );
   }
 }
@@ -358,7 +397,54 @@ class WeatherHomePage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Hourly and daily forecast sections are now here
+                  Card(
+                    color: Colors.white.withOpacity(0.1),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Current Conditions',
+                              style: TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildMetric(
+                                  icon: Icons.thermostat_auto,
+                                  label: 'Feels Like',
+                                  value:
+                                      '${convertTemperature(weather.feelsLike).round()}°${isCelsius ? 'C' : 'F'}'),
+                              _buildMetric(
+                                  icon: Icons.air,
+                                  label: 'Wind',
+                                  value: '${weather.windSpeed.round()} m/s'),
+                              _buildMetric(
+                                  icon: Icons.water_drop,
+                                  label: 'Humidity',
+                                  value: '${weather.humidity}%'),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildMetric(
+                                  icon: Icons.compress,
+                                  label: 'Pressure',
+                                  value: '${weather.pressure} hPa'),
+                              _buildMetric(
+                                  icon: Icons.visibility,
+                                  label: 'Visibility',
+                                  value:
+                                      '${(weather.visibility / 1000).round()} km'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   if (hourlyForecast.isNotEmpty)
                     _buildForecastSection(
                       title: 'Hourly Forecast',
@@ -378,6 +464,21 @@ class WeatherHomePage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMetric(
+      {required IconData icon, required String label, required String value}) {
+    return Column(
+      children: [
+        Icon(icon, size: 30, color: Colors.white70),
+        const SizedBox(height: 4),
+        Text(value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(label,
+            style: const TextStyle(fontSize: 12, color: Colors.white70)),
+      ],
     );
   }
 

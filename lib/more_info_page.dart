@@ -1,26 +1,21 @@
-// lib/splash_screen.dart
 import 'package:flutter/material.dart';
 
-class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
+class MoreInfoPage extends StatelessWidget {
+  const MoreInfoPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFF1E212A),
+    return const Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/images/logo.png',
-              height: 150,
-            ),
-            SizedBox(height: 24),
+            Icon(Icons.info_outline, size: 80, color: Colors.white70),
+            SizedBox(height: 16),
             Text(
-              'SkyCast',
+              'More Information',
               style: TextStyle(
-                fontSize: 48,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
