@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:skycast/weather_service.dart';
 import 'package:skycast/weather_model.dart';
 import 'package:skycast/settings_page.dart';
+import 'package:skycast/search_history_service.dart';
 import 'dart:async';
 
 void main() {
@@ -42,6 +43,7 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   final WeatherService _weatherService = WeatherService();
+  final SearchHistoryService _searchHistoryService = SearchHistoryService();
   Weather? _weather;
   List<Forecast>? _hourlyForecast;
   List<Forecast>? _dailyForecast;
@@ -50,6 +52,7 @@ class _MainNavigationState extends State<MainNavigation> {
   String _currentCity = '';
   bool _isCelsius = true;
   bool _is24HourFormat = true;
+  List<String> _searchHistory = [];
 
   int _selectedIndex = 0;
 
@@ -57,6 +60,14 @@ class _MainNavigationState extends State<MainNavigation> {
   void initState() {
     super.initState();
     _fetchWeatherByLocation();
+    _loadSearchHistory();
+  }
+
+  Future<void> _loadSearchHistory() async {
+    final history = await _searchHistoryService.getSearchHistory();
+    setState(() {
+      _searchHistory = history;
+    });
   }
 
   Future<void> _fetchWeatherByLocation() async {
@@ -73,6 +84,8 @@ class _MainNavigationState extends State<MainNavigation> {
         _currentCity = _weather!.cityName;
         _isLoading = false;
       });
+      _searchHistoryService.saveSearchHistory(_currentCity);
+      _loadSearchHistory();
     } catch (e) {
       setState(() {
         _error = 'Failed to fetch weather data. ($e)';
@@ -95,6 +108,8 @@ class _MainNavigationState extends State<MainNavigation> {
         _currentCity = _weather!.cityName;
         _isLoading = false;
       });
+      _searchHistoryService.saveSearchHistory(_currentCity);
+      _loadSearchHistory();
     } catch (e) {
       setState(() {
         _error = 'Failed to find city "$cityName". Please check the spelling.';
@@ -174,6 +189,10 @@ class _MainNavigationState extends State<MainNavigation> {
         convertTemperature: _convertTemperature,
         getBackgroundAsset: _getBackgroundAsset,
         formatTime: _formatTime,
+        searchHistory: _searchHistory,
+        onSelectCityFromHistory: (city) {
+          _fetchWeatherByCity(city);
+        },
       ),
       SettingsPage(
         isCelsius: _isCelsius,
@@ -224,6 +243,8 @@ class WeatherHomePage extends StatelessWidget {
   final Function(double) convertTemperature;
   final Function(String) getBackgroundAsset;
   final Function(int, int) formatTime;
+  final List<String> searchHistory;
+  final Function(String) onSelectCityFromHistory;
 
   const WeatherHomePage({
     super.key,
@@ -240,6 +261,8 @@ class WeatherHomePage extends StatelessWidget {
     required this.convertTemperature,
     required this.getBackgroundAsset,
     required this.formatTime,
+    required this.searchHistory,
+    required this.onSelectCityFromHistory,
   });
 
   @override
@@ -263,6 +286,51 @@ class WeatherHomePage extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.location_on),
             onPressed: onFetchByLocation,
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                builder: (BuildContext context) {
+                  return Container(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text(
+                            'Search History',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: searchHistory.length,
+                            itemBuilder: (context, index) {
+                              final city = searchHistory[index];
+                              return ListTile(
+                                leading: const Icon(Icons.location_city),
+                                title: Text(city),
+                                onTap: () {
+                                  onSelectCityFromHistory(city);
+                                  Navigator.pop(
+                                      context); // Close the bottom sheet
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
