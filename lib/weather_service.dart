@@ -2,8 +2,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
-import 'package:skycast/config.dart'; // Import your secure API key
-import 'package:skycast/weather_model.dart'; // Import the data models
+import 'package:skycast/config.dart';
+import 'package:skycast/weather_model.dart';
 
 // Weather service class
 class WeatherService {
@@ -50,8 +50,8 @@ class WeatherService {
       final data = json.decode(response.body);
       return CurrentWeather(
         weather: Weather.fromJson(data),
-        latitude: data['coord']['lat'],
-        longitude: data['coord']['lon'],
+        latitude: data['coord']['lat'].toDouble(),
+        longitude: data['coord']['lon'].toDouble(),
       );
     } else {
       throw Exception('Failed to load weather data');
@@ -60,7 +60,6 @@ class WeatherService {
 
   // NOTE: These methods are commented out because new free API keys
   // do not have access to the One Call API 3.0 by default.
-
   /*
   Future<ForecastData> fetchForecastByLocation(double lat, double lon) async {
     final response = await http.get(Uri.parse(

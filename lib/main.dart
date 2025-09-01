@@ -4,6 +4,9 @@ import 'package:skycast/splash_screen.dart';
 import 'package:skycast/weather_service.dart';
 import 'package:skycast/weather_model.dart';
 import 'package:skycast/config.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 
 void main() {
   runApp(const MyApp());
@@ -42,8 +45,8 @@ class WeatherAppLoader extends StatefulWidget {
 class _WeatherAppLoaderState extends State<WeatherAppLoader> {
   final WeatherService _weatherService = WeatherService();
   Weather? _weather;
-  // List<Forecast>? _hourlyForecast;
-  // List<Forecast>? _dailyForecast;
+  List<Forecast>? _hourlyForecast;
+  List<Forecast>? _dailyForecast;
   bool _isLoading = true;
   String _error = '';
   String _currentCity = '';
@@ -63,12 +66,10 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
     });
     try {
       final weatherData = await _weatherService.fetchWeatherByLocation();
-      // final forecastData = await _weatherService.fetchForecastByLocation(
-      //     weatherData.latitude, weatherData.longitude);
       setState(() {
         _weather = weatherData.weather;
-        // _hourlyForecast = forecastData.hourlyForecast;
-        // _dailyForecast = forecastData.dailyForecast;
+        _hourlyForecast = [];
+        _dailyForecast = [];
         _currentCity = _weather!.cityName;
         _isLoading = false;
       });
@@ -87,12 +88,10 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
     });
     try {
       final weatherData = await _weatherService.fetchWeatherByCity(cityName);
-      // final forecastData = await _weatherService.fetchForecastByLocation(
-      //     weatherData.latitude, weatherData.longitude);
       setState(() {
         _weather = weatherData.weather;
-        // _hourlyForecast = forecastData.hourlyForecast;
-        // _dailyForecast = forecastData.dailyForecast;
+        _hourlyForecast = [];
+        _dailyForecast = [];
         _currentCity = _weather!.cityName;
         _isLoading = false;
       });
@@ -139,6 +138,14 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
     return 'assets/backgrounds/default.jpg';
   }
 
+  // A helper function to format a Unix timestamp to a readable time.
+  String _formatTime(int unixTimestamp, int timezoneOffset) {
+    final dateTimeUtc =
+        DateTime.fromMillisecondsSinceEpoch(unixTimestamp * 1000, isUtc: true);
+    final localTime = dateTimeUtc.add(Duration(seconds: timezoneOffset));
+    return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -159,11 +166,11 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
         ),
       );
     }
-    // Now pass null to the forecast lists because they're not being used
+
     return WeatherHomePage(
       weather: _weather!,
-      hourlyForecast: [],
-      dailyForecast: [],
+      hourlyForecast: _hourlyForecast!,
+      dailyForecast: _dailyForecast!,
       currentCity: _currentCity,
       isCelsius: _isCelsius,
       onToggleUnit: _toggleUnit,
@@ -171,6 +178,7 @@ class _WeatherAppLoaderState extends State<WeatherAppLoader> {
       onFetchByCity: _fetchWeatherByCity,
       convertTemperature: _convertTemperature,
       getBackgroundAsset: _getBackgroundAsset,
+      formatTime: _formatTime, // Pass the new helper function
     );
   }
 }
@@ -186,6 +194,7 @@ class WeatherHomePage extends StatelessWidget {
   final Function(String) onFetchByCity;
   final Function(double) convertTemperature;
   final Function(String) getBackgroundAsset;
+  final Function(int, int) formatTime;
 
   const WeatherHomePage({
     super.key,
@@ -199,6 +208,7 @@ class WeatherHomePage extends StatelessWidget {
     required this.onFetchByCity,
     required this.convertTemperature,
     required this.getBackgroundAsset,
+    required this.formatTime,
   });
 
   @override
@@ -293,6 +303,14 @@ class WeatherHomePage extends StatelessWidget {
                           color: Colors.white.withOpacity(0.8),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Local Time: ${formatTime(weather.dt, weather.timezoneOffset)}',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
                       Image.network(
                         'https://openweathermap.org/img/wn/${weather.iconCode}@4x.png',
                         scale: 0.5,
@@ -302,8 +320,45 @@ class WeatherHomePage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // The forecast sections are now conditionally displayed
-                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Column(
+                          children: [
+                            const Icon(Icons.wb_sunny,
+                                size: 40, color: Colors.white),
+                            const SizedBox(height: 8),
+                            const Text('Sunrise',
+                                style: TextStyle(color: Colors.white70)),
+                            Text(
+                              formatTime(
+                                  weather.sunrise, weather.timezoneOffset),
+                              style: const TextStyle(
+                                  fontSize: 18, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                        Column(
+                          children: [
+                            const Icon(Icons.nights_stay,
+                                size: 40, color: Colors.white),
+                            const SizedBox(height: 8),
+                            const Text('Sunset',
+                                style: TextStyle(color: Colors.white70)),
+                            Text(
+                              formatTime(
+                                  weather.sunset, weather.timezoneOffset),
+                              style: const TextStyle(
+                                  fontSize: 18, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Hourly and daily forecast sections are now here
                   if (hourlyForecast.isNotEmpty)
                     _buildForecastSection(
                       title: 'Hourly Forecast',
