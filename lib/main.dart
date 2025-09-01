@@ -1,9 +1,6 @@
-import 'dart:convert';
+// lib/main.dart
+
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
-import 'package:skycast/config.dart';
-import 'package:skycast/splash_screen.dart';
 import 'package:skycast/weather_service.dart';
 import 'package:skycast/weather_model.dart';
 import 'package:skycast/settings_page.dart';
@@ -52,6 +49,7 @@ class _MainNavigationState extends State<MainNavigation> {
   String _error = '';
   String _currentCity = '';
   bool _isCelsius = true;
+  bool _is24HourFormat = true;
 
   int _selectedIndex = 0;
 
@@ -68,7 +66,6 @@ class _MainNavigationState extends State<MainNavigation> {
     });
     try {
       final weatherData = await _weatherService.fetchWeatherByLocation();
-      await Future.delayed(const Duration(seconds: 2));
       setState(() {
         _weather = weatherData.weather;
         _hourlyForecast = [];
@@ -77,7 +74,6 @@ class _MainNavigationState extends State<MainNavigation> {
         _isLoading = false;
       });
     } catch (e) {
-      await Future.delayed(const Duration(seconds: 2));
       setState(() {
         _error = 'Failed to fetch weather data. ($e)';
         _isLoading = false;
@@ -101,7 +97,7 @@ class _MainNavigationState extends State<MainNavigation> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to find city or fetch data. ($e)';
+        _error = 'Failed to find city "$cityName". Please check the spelling.';
         _isLoading = false;
       });
     }
@@ -110,6 +106,12 @@ class _MainNavigationState extends State<MainNavigation> {
   void _toggleUnit() {
     setState(() {
       _isCelsius = !_isCelsius;
+    });
+  }
+
+  void _toggleTimeFormat() {
+    setState(() {
+      _is24HourFormat = !_is24HourFormat;
     });
   }
 
@@ -146,36 +148,38 @@ class _MainNavigationState extends State<MainNavigation> {
     final dateTimeUtc =
         DateTime.fromMillisecondsSinceEpoch(unixTimestamp * 1000, isUtc: true);
     final localTime = dateTimeUtc.add(Duration(seconds: timezoneOffset));
-    return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+    if (_is24HourFormat) {
+      return '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+    } else {
+      final hour = localTime.hour > 12 ? localTime.hour - 12 : localTime.hour;
+      final ampm = localTime.hour >= 12 ? 'PM' : 'AM';
+      return '${hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')} $ampm';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const SplashScreen();
-    }
-    if (_error.isNotEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('SkyCast')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Text(
-              _error,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // List of widgets to display in the bottom navigation
     final List<Widget> pages = [
-      _buildHomePage(),
+      WeatherHomePage(
+        weather: _weather,
+        hourlyForecast: _hourlyForecast ?? [],
+        dailyForecast: _dailyForecast ?? [],
+        currentCity: _currentCity,
+        isCelsius: _isCelsius,
+        is24HourFormat: _is24HourFormat,
+        onToggleUnit: _toggleUnit,
+        onToggleTimeFormat: _toggleTimeFormat,
+        onFetchByLocation: _fetchWeatherByLocation,
+        onFetchByCity: _fetchWeatherByCity,
+        convertTemperature: _convertTemperature,
+        getBackgroundAsset: _getBackgroundAsset,
+        formatTime: _formatTime,
+      ),
       SettingsPage(
         isCelsius: _isCelsius,
         onToggleUnit: _toggleUnit,
+        is24HourFormat: _is24HourFormat,
+        onToggleTimeFormat: _toggleTimeFormat,
       ),
     ];
 
@@ -204,31 +208,17 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
     );
   }
-
-  Widget _buildHomePage() {
-    return WeatherHomePage(
-      weather: _weather!,
-      hourlyForecast: _hourlyForecast ?? [],
-      dailyForecast: _dailyForecast ?? [],
-      currentCity: _currentCity,
-      isCelsius: _isCelsius,
-      onToggleUnit: _toggleUnit,
-      onFetchByLocation: _fetchWeatherByLocation,
-      onFetchByCity: _fetchWeatherByCity,
-      convertTemperature: _convertTemperature,
-      getBackgroundAsset: _getBackgroundAsset,
-      formatTime: _formatTime,
-    );
-  }
 }
 
 class WeatherHomePage extends StatelessWidget {
-  final Weather weather;
+  final Weather? weather;
   final List<Forecast> hourlyForecast;
   final List<Forecast> dailyForecast;
   final String currentCity;
   final bool isCelsius;
+  final bool is24HourFormat;
   final VoidCallback onToggleUnit;
+  final VoidCallback onToggleTimeFormat;
   final VoidCallback onFetchByLocation;
   final Function(String) onFetchByCity;
   final Function(double) convertTemperature;
@@ -242,7 +232,9 @@ class WeatherHomePage extends StatelessWidget {
     required this.dailyForecast,
     required this.currentCity,
     required this.isCelsius,
+    required this.is24HourFormat,
     required this.onToggleUnit,
+    required this.onToggleTimeFormat,
     required this.onFetchByLocation,
     required this.onFetchByCity,
     required this.convertTemperature,
@@ -252,6 +244,11 @@ class WeatherHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (weather == null) {
+      return const Center(
+          child: CircularProgressIndicator(color: Colors.white));
+    }
+
     final TextEditingController cityController = TextEditingController();
 
     return Scaffold(
@@ -267,11 +264,6 @@ class WeatherHomePage extends StatelessWidget {
             icon: const Icon(Icons.location_on),
             onPressed: onFetchByLocation,
           ),
-          IconButton(
-            icon:
-                Icon(isCelsius ? Icons.thermostat : Icons.thermostat_outlined),
-            onPressed: onToggleUnit,
-          ),
         ],
       ),
       body: Stack(
@@ -279,7 +271,7 @@ class WeatherHomePage extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage(getBackgroundAsset(weather.iconCode)),
+                image: AssetImage(getBackgroundAsset(weather!.iconCode)),
                 fit: BoxFit.cover,
                 colorFilter: ColorFilter.mode(
                   Colors.black.withOpacity(0.4),
@@ -327,7 +319,7 @@ class WeatherHomePage extends StatelessWidget {
                   Column(
                     children: [
                       Text(
-                        '${convertTemperature(weather.temperature).round()}°${isCelsius ? 'C' : 'F'}',
+                        '${convertTemperature(weather!.temperature).round()}°${isCelsius ? 'C' : 'F'}',
                         style: const TextStyle(
                           fontSize: 96,
                           fontWeight: FontWeight.w100,
@@ -336,7 +328,7 @@ class WeatherHomePage extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        weather.description,
+                        weather!.description,
                         style: TextStyle(
                           fontSize: 24,
                           color: Colors.white.withOpacity(0.8),
@@ -344,14 +336,14 @@ class WeatherHomePage extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Local Time: ${formatTime(weather.dt, weather.timezoneOffset)}',
+                        'Local Time: ${formatTime(weather!.dt, weather!.timezoneOffset)}',
                         style: TextStyle(
                           fontSize: 18,
                           color: Colors.white.withOpacity(0.8),
                         ),
                       ),
                       Image.network(
-                        'https://openweathermap.org/img/wn/${weather.iconCode}@4x.png',
+                        'https://openweathermap.org/img/wn/${weather!.iconCode}@4x.png',
                         scale: 0.5,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
@@ -373,7 +365,7 @@ class WeatherHomePage extends StatelessWidget {
                                 style: TextStyle(color: Colors.white70)),
                             Text(
                               formatTime(
-                                  weather.sunrise, weather.timezoneOffset),
+                                  weather!.sunrise, weather!.timezoneOffset),
                               style: const TextStyle(
                                   fontSize: 18, color: Colors.white),
                             ),
@@ -388,7 +380,7 @@ class WeatherHomePage extends StatelessWidget {
                                 style: TextStyle(color: Colors.white70)),
                             Text(
                               formatTime(
-                                  weather.sunset, weather.timezoneOffset),
+                                  weather!.sunset, weather!.timezoneOffset),
                               style: const TextStyle(
                                   fontSize: 18, color: Colors.white),
                             ),
@@ -415,15 +407,15 @@ class WeatherHomePage extends StatelessWidget {
                                   icon: Icons.thermostat_auto,
                                   label: 'Feels Like',
                                   value:
-                                      '${convertTemperature(weather.feelsLike).round()}°${isCelsius ? 'C' : 'F'}'),
+                                      '${convertTemperature(weather!.feelsLike).round()}°${isCelsius ? 'C' : 'F'}'),
                               _buildMetric(
                                   icon: Icons.air,
                                   label: 'Wind',
-                                  value: '${weather.windSpeed.round()} m/s'),
+                                  value: '${weather!.windSpeed.round()} m/s'),
                               _buildMetric(
                                   icon: Icons.water_drop,
                                   label: 'Humidity',
-                                  value: '${weather.humidity}%'),
+                                  value: '${weather!.humidity}%'),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -433,12 +425,12 @@ class WeatherHomePage extends StatelessWidget {
                               _buildMetric(
                                   icon: Icons.compress,
                                   label: 'Pressure',
-                                  value: '${weather.pressure} hPa'),
+                                  value: '${weather!.pressure} hPa'),
                               _buildMetric(
                                   icon: Icons.visibility,
                                   label: 'Visibility',
                                   value:
-                                      '${(weather.visibility / 1000).round()} km'),
+                                      '${(weather!.visibility / 1000).round()} km'),
                             ],
                           ),
                         ],
